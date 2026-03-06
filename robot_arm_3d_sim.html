@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robot Arm Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#F0F4F8;
+  color:#1A2A3A;
+  font-family:'Share Tech Mono', monospace;
+  height:100vh;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+header {
+  background:linear-gradient(90deg,#FFFFFF,#EEF3F8);
+  border-bottom:1px solid rgba(0,120,200,0.15);
+  padding:10px 24px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-shrink:0;
+  box-shadow:0 1px 8px rgba(0,0,0,0.07);
+}
+.logo {
+  font-family:'Rajdhani',sans-serif;
+  font-weight:700;
+  font-size:20px;
+  letter-spacing:0.25em;
+  color:#0077CC;
+}
+.logo span{color:#E85D00}
+.header-stats{display:flex;gap:20px}
+.hstat{font-size:10px;color:#8AABB0;letter-spacing:0.08em}
+.hstat b{color:#0077CC}
+
+.layout{display:flex;flex:1;overflow:hidden}
+
+/* 3D VIEWPORT */
+#viewport{
+  flex:1;
+  position:relative;
+  background:#E8EFF6;
+}
+#viewport canvas{display:block}
+
+/* corner brackets */
+.brk{position:absolute;width:16px;height:16px;border-color:rgba(0,120,200,0.3);border-style:solid;pointer-events:none;z-index:5}
+.brk-tl{top:8px;left:8px;border-width:2px 0 0 2px}
+.brk-tr{top:8px;right:8px;border-width:2px 2px 0 0}
+.brk-bl{bottom:8px;left:8px;border-width:0 0 2px 2px}
+.brk-br{bottom:8px;right:8px;border-width:0 2px 2px 0}
+
+.vp-label{
+  position:absolute;top:14px;left:20px;
+  font-size:9px;color:#7A9AAA;letter-spacing:0.2em;
+  pointer-events:none;z-index:5;
+}
+.vp-label b{font-family:'Rajdhani',sans-serif;font-size:15px;color:#0077CC;display:block;letter-spacing:0.15em}
+
+.orbit-hint{
+  position:absolute;bottom:14px;left:20px;
+  font-size:9px;color:#8AABB0;letter-spacing:0.1em;
+  pointer-events:none;z-index:5;
+}
+
+/* PANEL */
+.panel{
+  width:300px;
+  background:#FFFFFF;
+  border-left:1px solid #D8E4EE;
+  display:flex;flex-direction:column;
+  overflow-y:auto;
+  flex-shrink:0;
+  box-shadow:-2px 0 12px rgba(0,0,0,0.04);
+}
+.panel-section{
+  padding:16px 16px 12px;
+  border-bottom:1px solid #EAF0F6;
+}
+.sec-title{
+  font-size:9px;color:#9AB0BE;letter-spacing:0.2em;
+  text-transform:uppercase;margin-bottom:12px;
+}
+
+/* JOINT CARD */
+.joint-card{
+  border:1px solid #E2EBF2;
+  border-left:3px solid;
+  border-radius:4px;
+  padding:12px 12px 10px;
+  margin-bottom:8px;
+  background:#F7FAFD;
+  transition:background 0.15s, box-shadow 0.15s;
+}
+.joint-card:hover{background:#EEF5FB; box-shadow:0 2px 8px rgba(0,120,200,0.08)}
+.jc-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.jc-name{font-size:10px;letter-spacing:0.1em;color:#4A7090}
+.jc-type{font-size:8px;color:#9AB0BE;letter-spacing:0.08em}
+.jc-val{
+  font-family:'Rajdhani',sans-serif;
+  font-size:22px;font-weight:700;
+  line-height:1;margin-bottom:8px;
+}
+.jc-val span{font-size:11px;font-weight:600;opacity:0.6}
+
+.slider-wrap{position:relative;height:6px;background:#D8E8F0;border-radius:3px;margin-bottom:5px}
+.slider-fill{
+  position:absolute;left:0;top:0;height:100%;
+  border-radius:3px;pointer-events:none;
+  transition:width 0.05s;
+}
+.slider-thumb{
+  position:absolute;top:50%;
+  width:14px;height:14px;
+  border-radius:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  transition:left 0.05s;
+  box-shadow:0 1px 5px rgba(0,0,0,0.2);
+}
+input.jslider{
+  position:absolute;top:50%;left:0;width:100%;
+  transform:translateY(-50%);
+  opacity:0;cursor:pointer;
+  height:20px;margin:0;z-index:2;
+}
+.jc-limits{display:flex;justify-content:space-between;font-size:8px;color:#9AB0BE}
+
+.base-badge{
+  font-size:8px;color:#6A90A8;
+  padding:2px 5px;border:1px solid #C8DCE8;
+  border-radius:2px;background:#EEF5FA;
+}
+
+/* RESET */
+.reset-btn{
+  width:100%;padding:11px 0;
+  background:#EEF5FB;
+  border:1px solid #A8CBE0;
+  color:#0077CC;
+  font-family:'Share Tech Mono',monospace;
+  font-size:10px;letter-spacing:0.2em;
+  cursor:pointer;border-radius:4px;
+  transition:all 0.2s;
+  text-transform:uppercase;
+}
+.reset-btn:hover{background:#DCF0FF;box-shadow:0 2px 10px rgba(0,120,200,0.15)}
+
+/* READOUTS */
+.readout-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:5px 0;border-bottom:1px solid #EAF0F6;
+  font-size:10px;
+}
+.ro-label{color:#7A9AAA}
+.ro-val{color:#0077CC;font-weight:bold}
+
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:#F0F4F8}
+::-webkit-scrollbar-thumb{background:#C0D8E8;border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">ARM<span>SIM</span> · 4+1 DOF</div>
+  <div class="header-stats">
+    <div class="hstat">L1 <b>10cm</b></div>
+    <div class="hstat">L2 <b>5cm</b></div>
+    <div class="hstat">L3 <b>9.5cm</b></div>
+    <div class="hstat">L4 <b>9cm</b></div>
+    <div class="hstat">L5 <b>14cm</b></div>
+    <div class="hstat">MASS <b>1.5kg</b></div>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- 3D Viewport -->
+  <div id="viewport">
+    <div class="brk brk-tl"></div><div class="brk brk-tr"></div>
+    <div class="brk brk-bl"></div><div class="brk brk-br"></div>
+    <div class="vp-label"><b>3D SIMULATION</b>CEILING-MOUNT · ARM FACING DOWN</div>
+    <div class="orbit-hint">🖱 DRAG to orbit · SCROLL to zoom · RIGHT DRAG to pan</div>
+  </div>
+
+  <!-- Control Panel -->
+  <div class="panel">
+    <div class="panel-section">
+      <div class="sec-title">── Joint Control</div>
+
+      <!-- Shoulder Pitch -->
+      <div class="joint-card" style="border-left-color:#FFD600">
+        <div class="jc-header">
+          <div class="jc-name">SHOULDER PITCH</div>
+          <div class="jc-type">UP / DOWN</div>
+        </div>
+        <div class="jc-val" style="color:#FFD600" id="val-sp">90<span>°</span></div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="fill-sp" style="background:linear-gradient(90deg,#FFD60066,#FFD600);width:50%"></div>
+          <div class="slider-thumb" id="thumb-sp" style="left:50%;color:#FFD600;background:#FFD600"></div>
+          <input type="range" class="jslider" id="sl-sp" min="0" max="180" value="90">
+        </div>
+        <div class="jc-limits"><span>0°</span><span class="base-badge">BASE 90°</span><span>180°</span></div>
+      </div>
+
+      <!-- Shoulder Roll -->
+      <div class="joint-card" style="border-left-color:#E53935">
+        <div class="jc-header">
+          <div class="jc-name">SHOULDER ROLL</div>
+          <div class="jc-type">ROTATION</div>
+        </div>
+        <div class="jc-val" style="color:#E53935" id="val-sr">90<span>°</span></div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="fill-sr" style="background:linear-gradient(90deg,#E5393566,#E53935);width:50%"></div>
+          <div class="slider-thumb" id="thumb-sr" style="left:50%;color:#E53935;background:#E53935"></div>
+          <input type="range" class="jslider" id="sl-sr" min="0" max="180" value="90">
+        </div>
+        <div class="jc-limits"><span>0°</span><span class="base-badge">BASE 90°</span><span>180°</span></div>
+      </div>
+
+      <!-- Elbow -->
+      <div class="joint-card" style="border-left-color:#1E88E5">
+        <div class="jc-header">
+          <div class="jc-name">ELBOW PITCH</div>
+          <div class="jc-type">UP / DOWN</div>
+        </div>
+        <div class="jc-val" style="color:#1E88E5" id="val-el">0<span>°</span></div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="fill-el" style="background:linear-gradient(90deg,#1E88E566,#1E88E5);width:0%"></div>
+          <div class="slider-thumb" id="thumb-el" style="left:0%;color:#1E88E5;background:#1E88E5"></div>
+          <input type="range" class="jslider" id="sl-el" min="0" max="160" value="0">
+        </div>
+        <div class="jc-limits"><span>0°</span><span class="base-badge">BASE 0°</span><span>160°</span></div>
+      </div>
+
+      <!-- Wrist Roll -->
+      <div class="joint-card" style="border-left-color:#AB47BC">
+        <div class="jc-header">
+          <div class="jc-name">WRIST ROLL</div>
+          <div class="jc-type">ROTATION</div>
+        </div>
+        <div class="jc-val" style="color:#AB47BC" id="val-wr">0<span>°</span></div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="fill-wr" style="background:linear-gradient(90deg,#AB47BC66,#AB47BC);width:0%"></div>
+          <div class="slider-thumb" id="thumb-wr" style="left:0%;color:#AB47BC;background:#AB47BC"></div>
+          <input type="range" class="jslider" id="sl-wr" min="0" max="180" value="0">
+        </div>
+        <div class="jc-limits"><span>0°</span><span class="base-badge">BASE 0°</span><span>180°</span></div>
+      </div>
+
+      <!-- Gripper -->
+      <div class="joint-card" style="border-left-color:#26A69A">
+        <div class="jc-header">
+          <div class="jc-name">GRIPPER</div>
+          <div class="jc-type">OPEN / CLOSE</div>
+        </div>
+        <div class="jc-val" style="color:#26A69A" id="val-gr">170<span>°</span></div>
+        <div class="slider-wrap">
+          <div class="slider-fill" id="fill-gr" style="background:linear-gradient(90deg,#26A69A66,#26A69A);width:83%"></div>
+          <div class="slider-thumb" id="thumb-gr" style="left:83%;color:#26A69A;background:#26A69A"></div>
+          <input type="range" class="jslider" id="sl-gr" min="120" max="180" value="170">
+        </div>
+        <div class="jc-limits"><span>120° open</span><span class="base-badge">BASE 170°</span><span>180° closed</span></div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <button class="reset-btn" id="resetBtn">⌂ RESET TO BASE</button>
+    </div>
+
+    <div class="panel-section">
+      <div class="sec-title">── End Effector Position</div>
+      <div class="readout-row"><div class="ro-label">X (lateral)</div><div class="ro-val" id="ro-x">— cm</div></div>
+      <div class="readout-row"><div class="ro-label">Y (forward)</div><div class="ro-val" id="ro-y">— cm</div></div>
+      <div class="readout-row"><div class="ro-label">Z (height)</div><div class="ro-val" id="ro-z">— cm</div></div>
+      <div class="readout-row"><div class="ro-label">Reach (XY)</div><div class="ro-val" id="ro-r">— cm</div></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="sec-title">── Link Lengths</div>
+      <div class="readout-row"><div class="ro-label">L1 Base→Sh.Pitch</div><div class="ro-val">10 cm</div></div>
+      <div class="readout-row"><div class="ro-label">L2 Sh.Pitch→Sh.Roll</div><div class="ro-val">5 cm</div></div>
+      <div class="readout-row"><div class="ro-label">L3 Sh.Roll→Elbow</div><div class="ro-val">9.5 cm</div></div>
+      <div class="readout-row"><div class="ro-label">L4 Elbow→Wrist</div><div class="ro-val">9 cm</div></div>
+      <div class="readout-row"><div class="ro-label">L5 Wrist→Tip</div><div class="ro-val">14 cm</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── LINK LENGTHS (scaled for Three.js units) ───
+const SCALE = 0.4; // 1 cm = 0.4 units
+const L1 = 10 * SCALE; // base → shoulder pitch
+const L2 = 5  * SCALE; // shoulder pitch → shoulder roll
+const L3 = 9.5* SCALE; // shoulder roll → elbow
+const L4 = 9  * SCALE; // elbow → wrist
+const L5 = 14 * SCALE; // wrist → gripper tip
+
+// ─── SCENE SETUP ───
+const viewport = document.getElementById('viewport');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0xE8EFF6);
+viewport.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0xD8E8F2, 0.008);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
+camera.position.set(18, -8, 20);
+camera.lookAt(0, -10, 0);
+
+// Resize
+function resize() {
+  const W = viewport.clientWidth, H = viewport.clientHeight;
+  renderer.setSize(W, H);
+  camera.aspect = W / H;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── LIGHTING ───
+scene.add(new THREE.AmbientLight(0xE8F0F8, 1.8));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(10, 20, 10);
+dirLight.castShadow = true;
+scene.add(dirLight);
+const rimLight = new THREE.DirectionalLight(0x4488CC, 0.4);
+rimLight.position.set(-10, 5, -10);
+scene.add(rimLight);
+const fillLight = new THREE.PointLight(0xFF8844, 0.3, 60);
+fillLight.position.set(-5, 10, 5);
+scene.add(fillLight);
+
+// ─── GRID / CEILING (mounted at top) ───
+const gridHelper = new THREE.GridHelper(50, 25, 0xB0C8DC, 0xD0E2EE);
+gridHelper.position.y = 2;
+scene.add(gridHelper);
+
+// Ceiling circle glow
+const floorGeo = new THREE.CircleGeometry(8, 64);
+const floorMat = new THREE.MeshBasicMaterial({
+  color: 0x0077CC, transparent: true, opacity: 0.05, side: THREE.DoubleSide
+});
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = 1.9;
+scene.add(floor);
+
+// Base ring (at ceiling)
+const baseRingGeo = new THREE.TorusGeometry(2.2, 0.12, 8, 48);
+const baseRingMat = new THREE.MeshBasicMaterial({ color: 0x0077CC, transparent: true, opacity: 0.35 });
+const baseRingMesh = new THREE.Mesh(baseRingGeo, baseRingMat);
+baseRingMesh.position.y = 0;
+scene.add(baseRingMesh);
+
+// ─── MATERIALS ───
+const matBase    = new THREE.MeshPhongMaterial({ color: 0x4A6070, shininess: 60, specular: 0x8AAABB });
+const matJointSP = new THREE.MeshPhongMaterial({ color: 0xFFBB00, shininess: 100, specular: 0xFFEE88, emissive: 0x221800 });
+const matJointSR = new THREE.MeshPhongMaterial({ color: 0xE53030, shininess: 100, specular: 0xFF8888, emissive: 0x220000 });
+const matJointEL = new THREE.MeshPhongMaterial({ color: 0x1A78D4, shininess: 100, specular: 0x88BBFF, emissive: 0x001133 });
+const matJointWR = new THREE.MeshPhongMaterial({ color: 0x9C27B0, shininess: 100, specular: 0xDD88FF, emissive: 0x110022 });
+const matLink    = new THREE.MeshPhongMaterial({ color: 0x6E8FA0, shininess: 50, specular: 0xAAC8D8 });
+const matGripper = new THREE.MeshPhongMaterial({ color: 0x009688, shininess: 80, specular: 0x66DDCC });
+const matEndEff  = new THREE.MeshPhongMaterial({ color: 0x00796B, shininess: 80, specular: 0x44BBAA });
+
+function makeCylinder(rTop, rBot, h, mat, segs=12) {
+  const g = new THREE.CylinderGeometry(rTop, rBot, h, segs);
+  return new THREE.Mesh(g, mat);
+}
+function makeSphere(r, mat) {
+  return new THREE.Mesh(new THREE.SphereGeometry(r, 14, 14), mat);
+}
+function makeBox(w, h, d, mat) {
+  return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+}
+
+// ─── ARM STRUCTURE ───
+// Base at y=0 (ceiling), all links grow DOWNWARD (-Y)
+
+// BASE COLUMN (fixed, hanging down from ceiling)
+const baseGroup = new THREE.Group();
+scene.add(baseGroup);
+
+const baseCol = makeCylinder(0.7, 1.0, L1, matBase);
+baseCol.position.y = -L1 / 2;   // hangs down
+baseCol.castShadow = true;
+baseGroup.add(baseCol);
+
+// decorative rings on base column
+[0.2, 0.5, 0.8].forEach(t => {
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(0.75, 0.07, 6, 24),
+    new THREE.MeshBasicMaterial({ color: 0x00C8FF, transparent: true, opacity: 0.4 })
+  );
+  ring.position.y = -L1 * t;
+  baseGroup.add(ring);
+});
+
+// ── SHOULDER PITCH GROUP (pivots at bottom of L1) ──
+const spGroup = new THREE.Group();
+spGroup.position.y = -L1;        // at bottom of base column
+baseGroup.add(spGroup);
+
+// Shoulder pitch joint (yellow cylinder - axis X)
+const spJoint = makeCylinder(0.5, 0.5, 1.0, matJointSP, 16);
+spJoint.rotation.z = Math.PI / 2;
+spGroup.add(spJoint);
+
+// Link L2 going DOWN from shoulder pitch
+const l2Link = makeCylinder(0.3, 0.35, L2, matLink);
+l2Link.position.y = -L2 / 2;
+spGroup.add(l2Link);
+
+// ── SHOULDER ROLL GROUP (pivots at bottom of L2) ──
+const srGroup = new THREE.Group();
+srGroup.position.y = -L2;
+spGroup.add(srGroup);
+
+// Shoulder roll joint (red cylinder - axis Y)
+const srJoint = makeCylinder(0.45, 0.45, 0.9, matJointSR, 16);
+srGroup.add(srJoint);
+
+// L3 link going DOWN
+const l3Link = makeCylinder(0.28, 0.32, L3, matLink);
+l3Link.position.y = -L3 / 2;
+srGroup.add(l3Link);
+
+// ── ELBOW GROUP (pivots at bottom of L3) ──
+const elGroup = new THREE.Group();
+elGroup.position.y = -L3;
+srGroup.add(elGroup);
+
+// Elbow joint (blue cylinder - axis X)
+const elJoint = makeCylinder(0.42, 0.42, 0.85, matJointEL, 16);
+elJoint.rotation.z = Math.PI / 2;
+elGroup.add(elJoint);
+
+// L4 link going DOWN
+const l4Link = makeCylinder(0.25, 0.28, L4, matLink);
+l4Link.position.y = -L4 / 2;
+elGroup.add(l4Link);
+
+// ── WRIST GROUP (pivots at bottom of L4) ──
+const wrGroup = new THREE.Group();
+wrGroup.position.y = -L4;
+elGroup.add(wrGroup);
+
+// Wrist roll joint (purple cylinder - axis Y)
+const wrJoint = makeCylinder(0.38, 0.38, 0.75, matJointWR, 16);
+wrGroup.add(wrJoint);
+
+// L5 link going DOWN
+const l5Link = makeCylinder(0.2, 0.24, L5 * 0.7, matLink);
+l5Link.position.y = -(L5 * 0.7) / 2;
+wrGroup.add(l5Link);
+
+// ── GRIPPER GROUP ──
+const gripGroup = new THREE.Group();
+gripGroup.position.y = -L5 * 0.7;
+wrGroup.add(gripGroup);
+
+// Gripper base
+const gripBase = makeCylinder(0.35, 0.35, 0.5, matGripper, 12);
+gripGroup.add(gripBase);
+
+// Left finger — opens downward
+const leftFinger = new THREE.Group();
+leftFinger.position.y = -0.25;
+gripGroup.add(leftFinger);
+const lfSeg1 = makeBox(0.18, 0.7, 0.12, matGripper);
+lfSeg1.position.set(-0.28, -0.35, 0);
+leftFinger.add(lfSeg1);
+const lfSeg2 = makeBox(0.14, 0.5, 0.10, matEndEff);
+lfSeg2.position.set(-0.28, -0.85, 0.04);
+leftFinger.add(lfSeg2);
+
+// Right finger
+const rightFinger = new THREE.Group();
+rightFinger.position.y = -0.25;
+gripGroup.add(rightFinger);
+const rfSeg1 = makeBox(0.18, 0.7, 0.12, matGripper);
+rfSeg1.position.set(0.28, -0.35, 0);
+rightFinger.add(rfSeg1);
+const rfSeg2 = makeBox(0.14, 0.5, 0.10, matEndEff);
+rfSeg2.position.set(0.28, -0.85, 0.04);
+rightFinger.add(rfSeg2);
+
+// End effector tip dot (at very bottom)
+const tipMarker = makeSphere(0.12, new THREE.MeshBasicMaterial({ color: 0xFF6B35 }));
+tipMarker.position.y = -(L5 * 0.3 + 1.3);
+wrGroup.add(tipMarker);
+
+// ── Glowing joint spheres (decorative) ──
+function addGlow(parent, color) {
+  const g = makeSphere(0.22, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6 }));
+  parent.add(g);
+}
+addGlow(spGroup, 0xFFBB00);
+addGlow(srGroup, 0xE53030);
+addGlow(elGroup, 0x1A78D4);
+addGlow(wrGroup, 0x9C27B0);
+
+// ─── ORBIT CONTROLS (manual) ───
+let isDragging = false, isRightDrag = false;
+let prevX = 0, prevY = 0;
+let orbitTheta = 0.6, orbitPhi = 0.85, orbitRadius = 28;
+let panX = 0, panY = -10;
+
+function updateCamera() {
+  camera.position.set(
+    panX + orbitRadius * Math.sin(orbitPhi) * Math.sin(orbitTheta),
+    panY + orbitRadius * Math.cos(orbitPhi),
+    orbitRadius * Math.sin(orbitPhi) * Math.cos(orbitTheta)
+  );
+  camera.lookAt(panX, panY, 0);
+}
+updateCamera();
+
+const vp = renderer.domElement;
+vp.addEventListener('mousedown', e => {
+  isDragging = true;
+  isRightDrag = e.button === 2;
+  prevX = e.clientX; prevY = e.clientY;
+});
+vp.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevX, dy = e.clientY - prevY;
+  if (isRightDrag) {
+    panX -= dx * 0.03; panY += dy * 0.03;
+  } else {
+    orbitTheta -= dx * 0.008;
+    orbitPhi = Math.max(0.05, Math.min(Math.PI * 0.9, orbitPhi + dy * 0.008));
+  }
+  prevX = e.clientX; prevY = e.clientY;
+  updateCamera();
+});
+vp.addEventListener('wheel', e => {
+  orbitRadius = Math.max(5, Math.min(80, orbitRadius + e.deltaY * 0.03));
+  updateCamera();
+});
+
+// ─── JOINT VALUES ───
+const joints = { sp: 90, sr: 90, el: 0, wr: 0, gr: 170 };
+
+// ─── UPDATE ARM ───
+function updateArm() {
+  const d = Math.PI / 180;
+
+  // Shoulder Pitch: tilts arm forward/back around X axis
+  // Base 90° = straight down; 0° = tilted forward; 180° = tilted back
+  spGroup.rotation.x = (joints.sp - 90) * d;
+
+  // Shoulder Roll: sweeps left/right around Y axis
+  // Base 90° = neutral; 0° = right; 180° = left
+  srGroup.rotation.y = (joints.sr - 90) * d;
+
+  // Elbow Pitch: bends elbow, arm folds upward (since hanging down)
+  // Base 0° = straight down; 160° = fully bent
+  elGroup.rotation.x = -joints.el * d;
+
+  // Wrist Roll: axial rotation
+  wrGroup.rotation.y = joints.wr * d;
+
+  // Gripper: symmetric open/close
+  const gripAngle = (joints.gr - 120) / 60; // 0=open, 1=closed
+  const spread = 0.35 * (1 - gripAngle);
+  leftFinger.position.x  = -(spread + 0.08);
+  rightFinger.position.x =  (spread + 0.08);
+  const curl = gripAngle * 0.4;
+  lfSeg2.position.z =  0.04 + curl * 0.3;
+  rfSeg2.position.z =  0.04 + curl * 0.3;
+
+  // Compute end effector world position
+  const tip = new THREE.Vector3();
+  tipMarker.getWorldPosition(tip);
+  const cmX = (tip.x / SCALE).toFixed(1);
+  const cmY = (tip.z / SCALE).toFixed(1);
+  const cmZ = (tip.y / SCALE).toFixed(1);
+  const reach = Math.sqrt(tip.x**2 + tip.z**2);
+  document.getElementById('ro-x').textContent = cmX + ' cm';
+  document.getElementById('ro-y').textContent = cmY + ' cm';
+  document.getElementById('ro-z').textContent = cmZ + ' cm';
+  document.getElementById('ro-r').textContent = (reach / SCALE).toFixed(1) + ' cm';
+}
+
+// ─── SLIDER SETUP ───
+function setupSlider(id, jointKey, min, max) {
+  const sl = document.getElementById('sl-' + id);
+  const valEl = document.getElementById('val-' + id);
+  const fillEl = document.getElementById('fill-' + id);
+  const thumbEl = document.getElementById('thumb-' + id);
+
+  sl.addEventListener('input', () => {
+    const v = parseFloat(sl.value);
+    joints[jointKey] = v;
+    const pct = ((v - min) / (max - min)) * 100;
+    fillEl.style.width = pct + '%';
+    thumbEl.style.left = pct + '%';
+    valEl.innerHTML = v + '<span>°</span>';
+    updateArm();
+  });
+}
+
+setupSlider('sp', 'sp', 0, 180);
+setupSlider('sr', 'sr', 0, 180);
+setupSlider('el', 'el', 0, 160);
+setupSlider('wr', 'wr', 0, 180);
+setupSlider('gr', 'gr', 120, 180);
+
+// ─── RESET ───
+document.getElementById('resetBtn').addEventListener('click', () => {
+  joints.sp = 90; joints.sr = 90; joints.el = 0; joints.wr = 0; joints.gr = 170;
+  [['sp',0,180],['sr',0,180],['el',0,160],['wr',0,180],['gr',120,180]].forEach(([id,mn,mx]) => {
+    const v = joints[id === 'sp' ? 'sp' : id === 'sr' ? 'sr' : id === 'el' ? 'el' : id === 'wr' ? 'wr' : 'gr'];
+    document.getElementById('sl-'+id).value = v;
+    const pct = ((v - mn) / (mx - mn)) * 100;
+    document.getElementById('fill-'+id).style.width = pct + '%';
+    document.getElementById('thumb-'+id).style.left = pct + '%';
+    document.getElementById('val-'+id).innerHTML = v + '<span>°</span>';
+  });
+  updateArm();
+});
+
+// ─── RENDER LOOP ───
+updateArm();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = Date.now() * 0.001;
+  baseRingMat.opacity = 0.2 + 0.1 * Math.sin(t * 2);
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
